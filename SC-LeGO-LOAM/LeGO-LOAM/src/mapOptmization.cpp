@@ -61,7 +61,7 @@ private:
     noiseModel::Diagonal::shared_ptr priorNoise;
     noiseModel::Diagonal::shared_ptr odometryNoise;
     noiseModel::Diagonal::shared_ptr constraintNoise;
-    noiseModel::Base::shared_ptr robustNoiseModel;
+    noiseModel::Base::shared_ptr robustNoiseModel; //scan-context(sc) add
 
     ros::NodeHandle nh;
 
@@ -74,7 +74,7 @@ private:
     ros::Publisher pubRecentKeyFrames;
     ros::Publisher pubRegisteredCloud;
 
-    ros::Subscriber subLaserCloudRaw;
+    ros::Subscriber subLaserCloudRaw; //sc add
     ros::Subscriber subLaserCloudCornerLast;
     ros::Subscriber subLaserCloudSurfLast;
     ros::Subscriber subOutlierCloudLast;
@@ -913,7 +913,7 @@ public:
         // std::lock_guard<std::mutex> lock(mtx);        
         latestFrameIDLoopCloure = cloudKeyPoses3D->points.size() - 1;
         SCclosestHistoryFrameID = -1; // init with -1
-        auto detectResult = scManager.detectLoopClosureID(); // first: nn index, second: yaw diff 
+        auto detectResult = scManager.detectLoopClosureID(); // first: nn index, second: yaw diff;  返回发生闭环的keyscan id, 以及查询keyscan和该keyscan的yaw角
         SCclosestHistoryFrameID = detectResult.first;
         yawDiffRad = detectResult.second; // not use for v1 (because pcl icp withi initial somthing wrong...)
 
@@ -1002,7 +1002,7 @@ public:
         /*
          * 1. RS loop factor (radius search)
          */
-        if( RSclosestHistoryFrameID != -1 ) {
+        if( RSclosestHistoryFrameID != -1 ) { // 原始的lego—loam
             pcl::IterativeClosestPoint<PointType, PointType> icp;
             icp.setMaxCorrespondenceDistance(100);
             icp.setMaximumIterations(100);
@@ -1618,21 +1618,27 @@ public:
         pcl::copyPointCloud(*laserCloudSurfLastDS,    *thisSurfKeyFrame);
         pcl::copyPointCloud(*laserCloudOutlierLastDS, *thisOutlierKeyFrame);
 
+
+
+
         /* 
             Scan Context loop detector 
             - ver 1: using surface feature as an input point cloud for scan context (2020.04.01: checked it works.)
             - ver 2: using downsampled original point cloud (/full_cloud_projected + downsampling)
-            */
+        */
         bool usingRawCloud = true;
         if( usingRawCloud ) { // v2 uses downsampled raw point cloud, more fruitful height information than using feature points (v1)
             pcl::PointCloud<PointType>::Ptr thisRawCloudKeyFrame(new pcl::PointCloud<PointType>());
             pcl::copyPointCloud(*laserCloudRawDS,  *thisRawCloudKeyFrame);
-            scManager.makeAndSaveScancontextAndKeys(*thisRawCloudKeyFrame);
+            scManager.makeAndSaveScancontextAndKeys(*thisRawCloudKeyFrame); //每次保存关键帧后, 用关键帧的全部点云或者其中的面特征点生成scan-context 
         }
         else { // v1 uses thisSurfKeyFrame, it also works. (empirically checked at Mulran dataset sequences)
             scManager.makeAndSaveScancontextAndKeys(*thisSurfKeyFrame); 
         }
         
+
+
+
         cornerCloudKeyFrames.push_back(thisCornerKeyFrame);
         surfCloudKeyFrames.push_back(thisSurfKeyFrame);
         outlierCloudKeyFrames.push_back(thisOutlierKeyFrame);
